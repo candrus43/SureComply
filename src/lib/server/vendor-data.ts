@@ -37,6 +37,26 @@ export const getTimeline = createServerFn({ method: "GET" }).handler(
       });
     }
 
+    // Reminder events
+    const reminders = queryAll<{ id: number; scheduled_date: string; status: string; sent_at: string | null; reminder_config_id: number }>(
+      "SELECT r.id, r.scheduled_date, r.status, r.sent_at, r.reminder_config_id FROM reminders r WHERE r.vendor_id = ? ORDER BY r.created_at DESC", [vendorId]
+    );
+    for (const r of reminders) {
+      if (r.status === "sent" && r.sent_at) {
+        const config = queryAll<{ days_before_expiry: number }>(
+          "SELECT days_before_expiry FROM reminder_configs WHERE id = ?", [r.reminder_config_id]
+        );
+        const daysBefore = config.length > 0 ? config[0].days_before_expiry : "?";
+        events.push({
+          id: `reminder-${r.id}`,
+          type: "reminder_sent",
+          title: "Reminder sent",
+          description: `Reminder sent — ${daysBefore} days before expiration`,
+          timestamp: r.sent_at,
+        });
+      }
+    }
+
     events.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
     return events;
   }

@@ -5,7 +5,7 @@ import { useState, useEffect, useCallback } from "react";
 import {
   ArrowLeft, Building2, Mail, Phone, MapPin, ShieldCheck, AlertTriangle,
   FileText, Clock, CheckCircle, XCircle, Upload, Send, Edit3,
-  ChevronDown, Plus, Trash2, Eye
+  ChevronDown, Plus, Trash2, Eye, Bell, BellOff
 } from "lucide-react";
 import { VendorSlideover, type VendorFormData } from "../../components/vendor-slideover";
 import { UploadZone } from "../../components/upload-zone";
@@ -184,7 +184,15 @@ function VendorDetailPage() {
       {/* Tab content */}
       <div className="p-6">
         {activeTab === "Overview" && (
-          <OverviewTab vendor={vendor} onInlineUpdate={handleInlineUpdate} />
+          <OverviewTab
+            vendor={vendor}
+            onInlineUpdate={handleInlineUpdate}
+            reminderPaused={reminderPaused}
+            reminderToggling={reminderToggling}
+            reminderReason={reminderReason}
+            setReminderReason={setReminderReason}
+            onToggleReminders={handleToggleReminders}
+          />
         )}
 
         {activeTab === "Coverages" && (
@@ -221,9 +229,19 @@ function VendorDetailPage() {
 function OverviewTab({
   vendor,
   onInlineUpdate,
+  reminderPaused,
+  reminderToggling,
+  reminderReason,
+  setReminderReason,
+  onToggleReminders,
 }: {
   vendor: any;
   onInlineUpdate: (field: string, value: string) => Promise<void>;
+  reminderPaused?: boolean;
+  reminderToggling?: boolean;
+  reminderReason?: string;
+  setReminderReason?: (v: string) => void;
+  onToggleReminders?: () => void;
 }) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -284,6 +302,55 @@ function OverviewTab({
           <span className="text-xs text-zinc-400">{formatDate(vendor.updated_at)}</span>
         </div>
       </div>
+      {/* Reminders */}
+      {onToggleReminders !== undefined && (
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-5 space-y-3">
+          <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+            <Bell className="w-4 h-4 text-zinc-400" /> Reminders
+          </h3>
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-zinc-300">
+              {reminderPaused ? "Paused" : "Active"}
+            </span>
+            <button
+              onClick={onToggleReminders}
+              disabled={reminderToggling}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors disabled:opacity-50 ${
+                reminderPaused
+                  ? "bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20"
+                  : "bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 border border-amber-500/20"
+              }`}
+            >
+              {reminderPaused ? (
+                <><Bell className="w-3.5 h-3.5" /> Resume</>
+              ) : (
+                <><BellOff className="w-3.5 h-3.5" /> Pause</>
+              )}
+            </button>
+          </div>
+          {!reminderPaused && setReminderReason && (
+            <div>
+              <input
+                type="text"
+                value={reminderReason}
+                onChange={(e) => setReminderReason(e.target.value)}
+                placeholder="Optional reason for pausing..."
+                className="w-full mt-1 px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-white text-xs focus:outline-none focus:border-emerald-500/50"
+              />
+            </div>
+          )}
+          {vendor.reminders_paused_reason && reminderPaused && (
+            <p className="text-xs text-zinc-500 mt-1">
+              Reason: {vendor.reminders_paused_reason}
+            </p>
+          )}
+          {vendor.reminders_paused_at && reminderPaused && (
+            <p className="text-xs text-zinc-600">
+              Paused: {formatDate(vendor.reminders_paused_at)}
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -429,6 +496,7 @@ function DocumentsTab({
 // ──── Timeline Tab ────
 
 const timelineIcons: Record<string, { icon: typeof CheckCircle; color: string; bg: string }> = {
+  reminder_sent: { icon: Bell, color: "text-violet-400", bg: "bg-violet-500/10" },
   vendor_created: { icon: Clock, color: "text-zinc-400", bg: "bg-zinc-500/10" },
   vendor_updated: { icon: Clock, color: "text-zinc-400", bg: "bg-zinc-500/10" },
   certificate_uploaded: { icon: Upload, color: "text-blue-400", bg: "bg-blue-500/10" },

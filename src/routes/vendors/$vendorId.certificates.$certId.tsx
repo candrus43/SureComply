@@ -1,14 +1,14 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
-import { getDb, queryOne, queryAll, execute, saveDb } from "../../../lib/db";
+import { getDb, queryOne, queryAll, execute, saveDb } from "../../lib/db";
 import { useState } from "react";
 import {
   ArrowLeft, FileText, Download, Loader2, CheckCircle, AlertCircle,
   RefreshCw, Save, Plus, Trash2, ExternalLink
 } from "lucide-react";
-import { COVERAGE_TYPES, coverageLabel, formatDate, formatCurrency, statusBadge, statusLabel } from "../../../lib/utils";
-import { extractFromFile } from "../../../lib/extraction";
-import { runComplianceCheck } from "../../../lib/compliance";
+import { COVERAGE_TYPES, coverageLabel, formatDate, formatCurrency, statusBadge, statusLabel } from "../../lib/utils";
+import { extractFromFile } from "../../lib/extraction";
+import { runComplianceCheck } from "../../lib/compliance";
 
 // ──── Server functions ────
 
