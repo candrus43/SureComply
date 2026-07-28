@@ -1,8 +1,10 @@
-import { createFileRoute, redirect, Link } from "@tanstack/react-router";
+import { createFileRoute, redirect, Link, useNavigate } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { getDb, queryOne, queryAll } from "../lib/db";
 import { useState } from "react";
 import { AlertCircle, RefreshCw, Plus, TrendingUp, Users, ShieldCheck, Clock, AlertTriangle, FileX } from "lucide-react";
+import { VendorSlideover, type VendorFormData } from "../components/vendor-slideover";
+import { createVendor } from "./api/-vendors";
 
 // ──── Server functions ────
 
@@ -78,6 +80,15 @@ export const Route = createFileRoute("/dashboard")({
 function DashboardPage() {
   const stats = Route.useLoaderData();
   const [error, setError] = useState<string | null>(null);
+  const [showSlideover, setShowSlideover] = useState(false);
+  const navigate = useNavigate();
+
+  const handleAddVendor = async (formData: VendorFormData) => {
+    const vendor = await createVendor({ data: formData });
+    if (vendor && vendor.id) {
+      navigate({ to: `/vendors/${vendor.id}` });
+    }
+  };
 
   if (error) {
     return (
@@ -136,12 +147,12 @@ function DashboardPage() {
           <p className="text-zinc-400 text-sm mt-1">Compliance overview at a glance</p>
         </div>
         <div className="flex items-center gap-3">
-          <Link
-            to="/vendors"
+          <button
+            onClick={() => setShowSlideover(true)}
             className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-black text-sm font-semibold rounded-lg transition-colors"
           >
             <Plus className="w-4 h-4" /> Add Vendor
-          </Link>
+          </button>
         </div>
       </div>
 
@@ -212,6 +223,12 @@ function DashboardPage() {
           </div>
         </div>
       )}
+      {/* Add Vendor Slide-over */}
+      <VendorSlideover
+        open={showSlideover}
+        onClose={() => setShowSlideover(false)}
+        onSubmit={handleAddVendor}
+      />
     </div>
   );
 }

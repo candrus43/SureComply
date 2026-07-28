@@ -13,6 +13,8 @@ import {
   FileX,
   Clock,
 } from "lucide-react";
+import { VendorSlideover, type VendorFormData } from "../components/vendor-slideover";
+import { createVendor } from "./api/-vendors";
 
 // ──── Types ────
 
@@ -156,7 +158,14 @@ function VendorsPage() {
   const { filter, q } = Route.useSearch();
   const navigate = useNavigate();
   const [searchText, setSearchText] = useState(q);
+  const [showSlideover, setShowSlideover] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+
+  const handleAddVendor = async (formData: VendorFormData) => {
+    await createVendor({ data: formData });
+    // Refresh the page
+    navigate({ to: "/vendors", search: { filter, q: q || undefined } as any, replace: true });
+  };
 
   const updateSearch = useCallback(
     (value: string) => {
@@ -207,7 +216,10 @@ function VendorsPage() {
             {data.total} vendor{data.total !== 1 ? "s" : ""}
           </p>
         </div>
-        <button className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-black text-sm font-semibold rounded-lg transition-colors">
+        <button
+          onClick={() => setShowSlideover(true)}
+          className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-black text-sm font-semibold rounded-lg transition-colors"
+        >
           <Plus className="w-4 h-4" /> Add Vendor
         </button>
       </div>
@@ -380,6 +392,12 @@ function VendorsPage() {
           )}
         </>
       )}
+      {/* Add Vendor Slide-over */}
+      <VendorSlideover
+        open={showSlideover}
+        onClose={() => setShowSlideover(false)}
+        onSubmit={handleAddVendor}
+      />
     </div>
   );
 }
