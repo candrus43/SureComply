@@ -1,8 +1,8 @@
 import { createFileRoute, redirect, Link, useNavigate } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { getDb, queryOne, queryAll } from "../lib/db";
-import { useState } from "react";
-import { AlertCircle, RefreshCw, Plus, TrendingUp, Users, ShieldCheck, Clock, AlertTriangle, FileX } from "lucide-react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { AlertCircle, RefreshCw, Plus, TrendingUp, Users, ShieldCheck, Clock, AlertTriangle, FileX, Search, Sparkles, Loader2, X } from "lucide-react";
 import { VendorSlideover, type VendorFormData } from "../components/vendor-slideover";
 import { createVendor } from "./api/-vendors";
 
@@ -73,7 +73,37 @@ export const Route = createFileRoute("/dashboard")({
   },
   loader: () => getDashboardStats(),
   component: DashboardPage,
+  pendingComponent: DashboardSkeleton,
 });
+
+// ──── Skeleton ────
+
+function DashboardSkeleton() {
+  return (
+    <div className="p-6 space-y-8">
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="h-8 w-48 bg-zinc-800 rounded-lg animate-pulse" />
+          <div className="h-4 w-64 bg-zinc-800 rounded mt-2 animate-pulse" />
+        </div>
+        <div className="h-10 w-32 bg-zinc-800 rounded-lg animate-pulse" />
+      </div>
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+        {[1, 2, 3, 4, 5, 6].map((i) => (
+          <div key={i} className="rounded-xl border border-zinc-800 bg-zinc-900 p-5 animate-pulse">
+            <div className="flex items-start justify-between">
+              <div className="space-y-2">
+                <div className="h-8 w-16 bg-zinc-800 rounded" />
+                <div className="h-4 w-24 bg-zinc-800 rounded" />
+              </div>
+              <div className="h-10 w-10 bg-zinc-800 rounded-lg" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 // ──── Component ────
 
@@ -82,6 +112,55 @@ function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [showSlideover, setShowSlideover] = useState(false);
   const navigate = useNavigate();
+
+  // AI query state
+  const [aiQuery, setAiQuery] = useState("");
+  const [aiResponse, setAiResponse] = useState<string | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const queryInputRef = useRef<HTMLInputElement>(null);
+
+  // ⌘K shortcut
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        queryInputRef.current?.focus();
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  const handleAiQuery = useCallback(async () => {
+    if (!aiQuery.trim()) return;
+    setAiLoading(true);
+    setAiError(null);
+    setAiResponse(null);
+    try {
+      const resp = await fetch("/api/ai/query", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: aiQuery.trim() }),
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        // Parse markdown-like rendered text with links
+        const rendered = data.rendered
+          .replace(/\[vendor:(\d+)\]/g, '<a href="/vendors/$1" class="text-emerald-400 hover:text-emerald-300 underline">View Vendor</a>')
+          .replace(/\[cert:(\d+)\]/g, '<a href="/vendors/0/certificates/$1" class="text-emerald-400 hover:text-emerald-300 underline">View Cert</a>')
+          .replace(/\*\*(.+?)\*\*/g, '<strong class="text-white">$1</strong>')
+          .replace(/\n/g, "<br>");
+        setAiResponse(rendered);
+      } else {
+        const err = await resp.json();
+        setAiError(err.error || "Query failed");
+      }
+    } catch {
+      setAiError("Unable to connect — please try again");
+    }
+    setAiLoading(false);
+  }, [aiQuery]);
 
   const handleAddVendor = async (formData: VendorFormData) => {
     const vendor = await createVendor({ data: formData });
@@ -156,8 +235,68 @@ function DashboardPage() {
         </div>
       </div>
 
+      {/* AI Query Bar */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+            <input
+              ref={queryInputRef}
+              type="text"
+              value={aiQuery}
+              onChange={(e) => setAiQuery(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") handleAiQuery(); }}
+              placeholder="Ask anything about your compliance... (⌘K)"
+              className="w-full pl-10 pr-4 py-2.5 bg-zinc-900 border border-zinc-800 rounded-xl text-white text-sm placeholder-zinc-500 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/20 transition-colors"
+            />
+            {aiQuery && (
+              <button
+                onClick={() => { setAiQuery(""); setAiResponse(null); setAiError(null); }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded text-zinc-500 hover:text-white"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+          <button
+            onClick={handleAiQuery}
+            disabled={aiLoading || !aiQuery.trim()}
+            className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-blue-500 hover:bg-blue-400 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-xl transition-colors"
+          >
+            {aiLoading ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Sparkles className="w-4 h-4" />
+            )}
+            Ask
+          </button>
+        </div>
+
+        {/* AI Response */}
+        {aiResponse && (
+          <div className="border-l-2 border-blue-500 bg-blue-500/5 rounded-r-xl p-4">
+            <div
+              className="text-sm text-zinc-300 leading-relaxed"
+              dangerouslySetInnerHTML={{ __html: aiResponse }}
+            />
+          </div>
+        )}
+        {aiError && (
+          <div className="flex items-center gap-3 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400">
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            <p className="text-sm flex-1">{aiError}</p>
+            <button
+              onClick={handleAiQuery}
+              className="text-xs font-medium text-red-400 hover:text-red-300"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+      </div>
+
       {/* Summary cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
         {cards.map((card) => (
           <a
             key={card.label}

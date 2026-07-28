@@ -12,7 +12,7 @@ function getExpiryDate(): string {
   return d.toISOString().replace("T", " ").slice(0, 19);
 }
 
-export const Route = createFileRoute("/api/portal/token")({
+export const Route = createFileRoute("/api/portal/manage")({
   server: {
     handlers: {
       POST: async ({ request }) => {

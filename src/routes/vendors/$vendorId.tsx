@@ -4,7 +4,7 @@ import { getDb, queryOne, queryAll, execute, saveDb } from "../../lib/db";
 import { useState, useEffect, useCallback } from "react";
 import {
   ArrowLeft, Building2, Mail, Phone, MapPin, ShieldCheck, AlertTriangle,
-  FileText, Clock, CheckCircle, XCircle, Upload, Send, Edit3,
+  FileText, Clock, CheckCircle, XCircle, Upload, Send, Edit3, Copy, RefreshCw, Link2,
   ChevronDown, Plus, Trash2, Eye, Bell, BellOff
 } from "lucide-react";
 import { VendorSlideover, type VendorFormData } from "../../components/vendor-slideover";
@@ -52,7 +52,7 @@ export const Route = createFileRoute("/vendors/$vendorId")({
 
 // ──── Tabs ────
 
-const TABS = ["Overview", "Coverages", "Documents", "Timeline"] as const;
+const TABS = ["Overview", "Coverages", "Documents", "Timeline", "Portal"] as const;
 type Tab = (typeof TABS)[number];
 
 // ──── Inline edit field ────
@@ -126,6 +126,51 @@ function VendorDetailPage() {
     return { color: "text-emerald-400", bg: "bg-emerald-500/10", label: "Compliant", icon: ShieldCheck };
   };
 
+
+  // Portal token state
+  const [portalToken, setPortalToken] = useState<{ token: string; expires_at: string } | null>(null);
+  const [portalLoading, setPortalLoading] = useState(false);
+  const [portalCopied, setPortalCopied] = useState(false);
+
+  const createPortalToken = async () => {
+    setPortalLoading(true);
+    try {
+      const resp = await fetch("/api/portal/manage", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ vendor_id: vendor.id }),
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        setPortalToken({ token: data.token, expires_at: data.expires_at });
+      }
+    } catch {}
+    setPortalLoading(false);
+  };
+
+  const revokePortalToken = async () => {
+    setPortalLoading(true);
+    try {
+      await fetch("/api/portal/manage", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ vendor_id: vendor.id }),
+      });
+      setPortalToken(null);
+    } catch {}
+    setPortalLoading(false);
+  };
+
+  const copyPortalLink = () => {
+    if (portalToken) {
+      navigator.clipboard.writeText(
+        `${window.location.origin}/portal/${portalToken.token}`
+      );
+      setPortalCopied(true);
+      setTimeout(() => setPortalCopied(false), 2000);
+    }
+  };
+
   const badge = getComplianceBadge();
 
   const handleEdit = async (formData: VendorFormData) => {
@@ -161,6 +206,41 @@ function VendorDetailPage() {
           >
             Edit
           </button>
+          {/* Portal token buttons */}
+          {portalToken ? (
+            <div className="flex items-center gap-1">
+              <button
+                onClick={copyPortalLink}
+                className="px-3 py-1.5 text-sm text-emerald-400 border border-emerald-500/20 bg-emerald-500/10 rounded-lg hover:bg-emerald-500/20 transition-colors flex items-center gap-1.5"
+              >
+                {portalCopied ? <><CheckCircle className="w-3.5 h-3.5" /> Copied</> : <><Link2 className="w-3.5 h-3.5" /> Copy Link</>}
+              </button>
+              <button
+                onClick={() => window.open(`/portal/${portalToken.token}`, "_blank")}
+                className="px-3 py-1.5 text-sm text-zinc-400 border border-zinc-700 rounded-lg hover:text-white hover:border-zinc-600 transition-colors flex items-center gap-1.5"
+                title="Open portal"
+              >
+                <Send className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={revokePortalToken}
+                disabled={portalLoading}
+                className="px-3 py-1.5 text-sm text-red-400 border border-red-500/20 rounded-lg hover:bg-red-500/10 transition-colors flex items-center gap-1.5 disabled:opacity-50"
+                title="Revoke token"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${portalLoading ? "animate-spin" : ""}`} />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={createPortalToken}
+              disabled={portalLoading}
+              className="px-3 py-1.5 text-sm text-emerald-400 border border-emerald-500/20 rounded-lg hover:bg-emerald-500/10 transition-colors flex items-center gap-1.5 disabled:opacity-50"
+            >
+              <Send className="w-3.5 h-3.5" />
+              {portalLoading ? "Sending..." : "Send Portal Link"}
+            </button>
+          )}
         </div>
 
         {/* Tabs */}
@@ -209,6 +289,17 @@ function VendorDetailPage() {
 
         {activeTab === "Timeline" && (
           <TimelineTab timeline={data.timeline} />
+        )}
+        {activeTab === "Portal" && (
+          <PortalTab
+            vendorId={vendor.id}
+            portalToken={portalToken}
+            portalLoading={portalLoading}
+            portalCopied={portalCopied}
+            onCreateToken={createPortalToken}
+            onRevokeToken={revokePortalToken}
+            onCopyLink={copyPortalLink}
+          />
         )}
       </div>
 
@@ -535,6 +626,103 @@ function TimelineTab({ timeline }: { timeline: any[] }) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// ──── Portal Tab ────
+
+function PortalTab({
+  vendorId,
+  portalToken,
+  portalLoading,
+  portalCopied,
+  onCreateToken,
+  onRevokeToken,
+  onCopyLink,
+}: {
+  vendorId: number;
+  portalToken: { token: string; expires_at: string } | null;
+  portalLoading: boolean;
+  portalCopied: boolean;
+  onCreateToken: () => void;
+  onRevokeToken: () => void;
+  onCopyLink: () => void;
+}) {
+  const portalUrl = portalToken
+    ? `${typeof window !== "undefined" ? window.location.origin : ""}/portal/${portalToken.token}`
+    : "";
+
+  return (
+    <div className="max-w-lg">
+      <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6 space-y-4">
+        <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+          <Link2 className="w-4 h-4 text-zinc-400" /> Vendor Portal
+        </h3>
+        <p className="text-sm text-zinc-400">
+          The vendor portal allows vendors to upload certificates and view their compliance
+          status without needing a login.
+        </p>
+
+        {portalToken ? (
+          <>
+            <div className="rounded-lg border border-zinc-800 bg-zinc-950 p-4 space-y-2">
+              <label className="text-xs font-medium text-zinc-500">Portal Link</label>
+              <div className="flex items-center gap-2">
+                <input
+                  readOnly
+                  value={portalUrl}
+                  className="flex-1 px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-white text-sm"
+                />
+                <button
+                  onClick={onCopyLink}
+                  className="px-3 py-2 text-sm text-emerald-400 border border-emerald-500/20 bg-emerald-500/10 rounded-lg hover:bg-emerald-500/20 transition-colors"
+                >
+                  {portalCopied ? "Copied!" : "Copy"}
+                </button>
+              </div>
+              <div className="flex items-center gap-1 text-xs">
+                <span className="text-zinc-500">Status:</span>
+                <span className="text-emerald-400 flex items-center gap-1">
+                  <CheckCircle className="w-3 h-3" /> Active
+                </span>
+                <span className="text-zinc-600">— expires {new Date(portalToken.expires_at).toLocaleDateString()}</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <a
+                href={portalUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-zinc-800 rounded-lg hover:bg-zinc-700 transition-colors"
+              >
+                <Send className="w-3.5 h-3.5" /> Open Portal
+              </a>
+              <button
+                onClick={onRevokeToken}
+                disabled={portalLoading}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-red-400 border border-red-500/20 rounded-lg hover:bg-red-500/10 transition-colors disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${portalLoading ? "animate-spin" : ""}`} />
+                Regenerate Token
+              </button>
+            </div>
+          </>
+        ) : (
+          <div className="rounded-lg border border-dashed border-zinc-700 p-6 text-center">
+            <Send className="w-8 h-8 text-zinc-600 mx-auto mb-3" />
+            <p className="text-sm text-zinc-400 mb-4">No portal link created yet</p>
+            <button
+              onClick={onCreateToken}
+              disabled={portalLoading}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-black text-sm font-semibold rounded-lg transition-colors"
+            >
+              <Send className="w-3.5 h-3.5" />
+              {portalLoading ? "Creating..." : "Send Portal Link"}
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
